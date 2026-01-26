@@ -7,10 +7,19 @@ Only `src/network3.py` has been updated.
 `src/network.py` and `src/network2.py` are unchanged as they use Numpy to simulate the neural networks.
 
 > [!NOTE]
+> **You can still follow Nielsen's book as if nothing changed.**
+>
+> This was the most important requirement. You can copy-paste the console commands given in the book and they will run.
+>
+> Only when you'll be asked to modify `network3.py` yourself in chapter 6 you'll have to understand how it works.
+> Hopefully I didn't make it too difficult.
+
+> [!NOTE]
 > **Hardware compatibility :**
 >
 > So far only tested on Python 3.10.19 + torch 2.5.1+cu121 on an RTX 4050.
 > Will test more recent versions of Python in the future.
+> Feel free to send a PR for README.md if you succesfully tested on a different configuration.
 >
 > Running on a non-Nvidia GPU will trigger CPU mode.
 
