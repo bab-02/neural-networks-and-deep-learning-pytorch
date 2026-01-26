@@ -6,13 +6,34 @@ The main motivation was that Theano has been deprecated since Python 3.5.
 Only `src/network3.py` has been updated.
 `src/network.py` and `src/network2.py` are unchanged as they use Numpy to simulate the neural networks.
 
-#### Details on the changes
+> [!NOTE]
+> **Hardware compatibility :**
+>
+> So far only tested on Python 3.10.19 + torch 2.5.1+cu121 on an RTX 4050.
+> Will test more recent versions of Python in the future.
+>
+> Running on a non-Nvidia GPU will trigger CPU mode.
 
-wip
+### Details on the changes
 
-#### TODO
+#### Requirements
 
-- [x] Fix `Network.feedforward()` not working when the network starts with a layer type different from `ConvPoolLayer`
+- Numpy version is no longer capped to 1.22
+- Theano removed
+- Torch added: 2.2.0 minimum for Numpy 2.0 compatibility
+
+#### Theano to Pytorch
+
+Theano uses symbolic variables while Pytorch uses explicit values. This is what caused most of the changes.
+
+Most notable differences:
+
+- In `Network` class, the original `__init()__` function as been split into `__init()__` and `feedforward()`.
+- Modified the `theano.function([i], cost, updates=updates, givens={...})` as methods of the `Network` class.
+
+### TODO
+
+- [x] Fix `Network.feedforward()` not working when the network starts with a layer type different to `ConvPoolLayer`
 - [x] (NOT RESETTING. INTENDED BEHAVIOR) Reset the weights to fix `Network.SGD` starting with already good weights after a rerun
 - [ ] Fix vram accumulation when changing the layer structure of `Network` (only current solution is to restart the whole ipython kernel)
 - [ ] Update remaining files to Pytorch.
