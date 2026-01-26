@@ -4,7 +4,7 @@ Got the code from https://github.com/MichalDanielDobrzanski/DeepLearningPython/p
 
 """network3.py
 ~~~~~~~~~~~~~~
-A Theano-based program for training and running simple neural
+A Pytorch-based program for training and running simple neural
 networks.
 Supports several layer types (fully connected, convolutional, max
 pooling, softmax), and activation functions (sigmoid, tanh, and
@@ -12,17 +12,12 @@ rectified linear units, with more easily added).
 When run on a CPU, this program is much faster than network.py and
 network2.py.  However, unlike network.py and network2.py it can also
 be run on a GPU, which makes it faster still.
-Because the code is based on Theano, the code is different in many
-ways from network.py and network2.py.  However, where possible I have
-tried to maintain consistency with the earlier programs.  In
+Now that the code is based on Pytorch, it ressembles network.py and
+network2.py more than when based on Theano.  However, where possible
+I have tried to maintain consistency with the earlier programs.  In
 particular, the API is similar to network2.py.  Note that I have
 focused on making the code simple, easily readable, and easily
 modifiable.  It is not optimized, and omits many desirable features.
-This program incorporates ideas from the Theano documentation on
-convolutional neural nets (notably,
-http://deeplearning.net/tutorial/lenet.html ), from Misha Denil's
-implementation of dropout (https://github.com/mdenil/dropout ), and
-from Chris Olah (http://colah.github.io ).
 """
 
 #### Libraries
@@ -32,149 +27,44 @@ import gzip
 
 # Third-party libraries
 import numpy as np
-import theano
-import theano.tensor as T
-from theano.tensor.nnet import conv
-from theano.tensor.nnet import softmax
-from theano.tensor import shared_randomstreams
-from theano.tensor.signal.pool import pool_2d
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 # Activation functions for neurons
 def linear(z): return z
-def ReLU(z): return T.maximum(0.0, z)
-from theano.tensor.nnet import sigmoid
-from theano.tensor import tanh
+def ReLU(z): return F.relu(z)
+from torch.nn.functional import sigmoid, tanh
 
 
-#### Constants
+
 GPU = True
 if GPU:
-    print("Trying to run under a GPU.  If this is not desired, then modify "+\
-        "network3.py\nto set the GPU flag to False.")
-    try: theano.config.device = 'gpu'
-    except: pass # it's already set
-    theano.config.floatX = 'float32'
+    print("Trying to run under a GPU. If this is not desired,\nthen modify network3.py to set the GPU flag to False.")
+    if torch.cuda.is_available():
+        print(f"CUDA device found: {torch.cuda.get_device_name(0)}\n")
+        device = torch.device("cuda")
+        torch.set_default_device("cuda")
+    else:
+        print("Pytorch did not find CUDA device. Using CPU.\n")
+        device = torch.device("cpu")
+        torch.set_default_device("cpu")
 else:
-    print("Running with a CPU.  If this is not desired, then the modify "+\
-        "network3.py to set\nthe GPU flag to True.")
+    print("Running with a CPU. If this is not desired, then the modify network3.py to set\nthe GPU flag to True.")
+    device = torch.device("cpu")
+    torch.set_default_device("cpu")
 
-#### Load the MNIST data
 def load_data_shared(filename="../data/mnist.pkl.gz"):
     f = gzip.open(filename, 'rb')
     training_data, validation_data, test_data = pickle.load(f, encoding="latin1")
     f.close()
+
     def shared(data):
-        """Place the data into shared variables.  This allows Theano to copy
-        the data to the GPU, if one is available.
-        """
-        shared_x = theano.shared(
-            np.asarray(data[0], dtype=theano.config.floatX), borrow=True)
-        shared_y = theano.shared(
-            np.asarray(data[1], dtype=theano.config.floatX), borrow=True)
-        return shared_x, T.cast(shared_y, "int32")
-    return [shared(training_data), shared(validation_data), shared(test_data)]
+        shared_x = torch.tensor(data[0], dtype=torch.float32)
+        shared_y = torch.tensor(data[1], dtype=torch.float32)
+        return shared_x, shared_y.type(torch.int32)
 
-#### Main class used to construct and train networks
-class Network(object):
-
-    def __init__(self, layers, mini_batch_size):
-        """Takes a list of `layers`, describing the network architecture, and
-        a value for the `mini_batch_size` to be used during training
-        by stochastic gradient descent.
-        """
-        self.layers = layers
-        self.mini_batch_size = mini_batch_size
-        self.params = [param for layer in self.layers for param in layer.params]
-        self.x = T.matrix("x")
-        self.y = T.ivector("y")
-        init_layer = self.layers[0]
-        init_layer.set_inpt(self.x, self.x, self.mini_batch_size)
-        for j in range(1, len(self.layers)): # xrange() was renamed to range() in Python 3.
-            prev_layer, layer  = self.layers[j-1], self.layers[j]
-            layer.set_inpt(
-                prev_layer.output, prev_layer.output_dropout, self.mini_batch_size)
-        self.output = self.layers[-1].output
-        self.output_dropout = self.layers[-1].output_dropout
-
-    def SGD(self, training_data, epochs, mini_batch_size, eta,
-            validation_data, test_data, lmbda=0.0):
-        """Train the network using mini-batch stochastic gradient descent."""
-        training_x, training_y = training_data
-        validation_x, validation_y = validation_data
-        test_x, test_y = test_data
-
-        # compute number of minibatches for training, validation and testing
-        num_training_batches = int(size(training_data)/mini_batch_size)
-        num_validation_batches = int(size(validation_data)/mini_batch_size)
-        num_test_batches = int(size(test_data)/mini_batch_size)
-
-        # define the (regularized) cost function, symbolic gradients, and updates
-        l2_norm_squared = sum([(layer.w**2).sum() for layer in self.layers])
-        cost = self.layers[-1].cost(self)+\
-               0.5*lmbda*l2_norm_squared/num_training_batches
-        grads = T.grad(cost, self.params)
-        updates = [(param, param-eta*grad)
-                   for param, grad in zip(self.params, grads)]
-
-        # define functions to train a mini-batch, and to compute the
-        # accuracy in validation and test mini-batches.
-        i = T.lscalar() # mini-batch index
-        train_mb = theano.function(
-            [i], cost, updates=updates,
-            givens={
-                self.x:
-                training_x[i*self.mini_batch_size: (i+1)*self.mini_batch_size],
-                self.y:
-                training_y[i*self.mini_batch_size: (i+1)*self.mini_batch_size]
-            })
-        validate_mb_accuracy = theano.function(
-            [i], self.layers[-1].accuracy(self.y),
-            givens={
-                self.x:
-                validation_x[i*self.mini_batch_size: (i+1)*self.mini_batch_size],
-                self.y:
-                validation_y[i*self.mini_batch_size: (i+1)*self.mini_batch_size]
-            })
-        test_mb_accuracy = theano.function(
-            [i], self.layers[-1].accuracy(self.y),
-            givens={
-                self.x:
-                test_x[i*self.mini_batch_size: (i+1)*self.mini_batch_size],
-                self.y:
-                test_y[i*self.mini_batch_size: (i+1)*self.mini_batch_size]
-            })
-        self.test_mb_predictions = theano.function(
-            [i], self.layers[-1].y_out,
-            givens={
-                self.x:
-                test_x[i*self.mini_batch_size: (i+1)*self.mini_batch_size]
-            })
-        # Do the actual training
-        best_validation_accuracy = 0.0
-        for epoch in range(epochs):
-            for minibatch_index in range(num_training_batches):
-                iteration = num_training_batches*epoch+minibatch_index
-                if iteration % 1000 == 0:
-                    print("Training mini-batch number {0}".format(iteration))
-                cost_ij = train_mb(minibatch_index)
-                if (iteration+1) % num_training_batches == 0:
-                    validation_accuracy = np.mean(
-                        [validate_mb_accuracy(j) for j in range(num_validation_batches)])
-                    print("Epoch {0}: validation accuracy {1:.2%}".format(
-                        epoch, validation_accuracy))
-                    if validation_accuracy >= best_validation_accuracy:
-                        print("This is the best validation accuracy to date.")
-                        best_validation_accuracy = validation_accuracy
-                        best_iteration = iteration
-                        if test_data:
-                            test_accuracy = np.mean(
-                                [test_mb_accuracy(j) for j in range(num_test_batches)])
-                            print('The corresponding test accuracy is {0:.2%}'.format(
-                                test_accuracy))
-        print("Finished training network.")
-        print("Best validation accuracy of {0:.2%} obtained at iteration {1}".format(
-            best_validation_accuracy, best_iteration))
-        print("Corresponding test accuracy of {0:.2%}".format(test_accuracy))
+    return [list(shared(training_data)), list(shared(validation_data)), list(shared(test_data))]
 
 #### Define layer types
 
@@ -185,8 +75,7 @@ class ConvPoolLayer(object):
     simplifies the code, so it makes sense to combine them.
     """
 
-    def __init__(self, filter_shape, image_shape, poolsize=(2, 2),
-                 activation_fn=sigmoid):
+    def __init__(self, filter_shape, image_shape, poolsize=(2, 2), activation_fn=sigmoid):
         """`filter_shape` is a tuple of length 4, whose entries are the number
         of filters, the number of input feature maps, the filter height, and the
         filter width.
@@ -199,105 +88,221 @@ class ConvPoolLayer(object):
         self.filter_shape = filter_shape
         self.image_shape = image_shape
         self.poolsize = poolsize
-        self.activation_fn=activation_fn
+        self.activation_fn = activation_fn
+
         # initialize weights and biases
-        n_out = (filter_shape[0]*np.prod(filter_shape[2:])/np.prod(poolsize))
-        self.w = theano.shared(
-            np.asarray(
-                np.random.normal(loc=0, scale=np.sqrt(1.0/n_out), size=filter_shape),
-                dtype=theano.config.floatX),
-            borrow=True)
-        self.b = theano.shared(
-            np.asarray(
-                np.random.normal(loc=0, scale=1.0, size=(filter_shape[0],)),
-                dtype=theano.config.floatX),
-            borrow=True)
+        n_out = np.prod(filter_shape)/np.prod(poolsize)
+        self.w = torch.normal(0., np.sqrt(1.0/n_out), filter_shape, requires_grad=True, dtype=torch.float32, device=device)
+        self.b = torch.randn(filter_shape[0], requires_grad=True, dtype=torch.float32)
         self.params = [self.w, self.b]
 
+    # set_inpt is just the feedforward function
     def set_inpt(self, inpt, inpt_dropout, mini_batch_size):
         self.inpt = inpt.reshape(self.image_shape)
-        conv_out = conv.conv2d(
-            input=self.inpt, filters=self.w, filter_shape=self.filter_shape,
-            image_shape=self.image_shape)
-        pooled_out = pool_2d(
-            input=conv_out, ws=self.poolsize, ignore_border=True)
-        self.output = self.activation_fn(
-            pooled_out + self.b.dimshuffle('x', 0, 'x', 'x'))
+        conv_out = F.conv2d(self.inpt, self.w)
+        pooled_out = F.max_pool2d(conv_out, self.poolsize)
+        self.output = self.activation_fn(pooled_out + (self.b.unsqueeze(0)).unsqueeze(-1).unsqueeze(-1)) # Pytorch's way of doing Theano's dimshuffle is nested unsqueezes
         self.output_dropout = self.output # no dropout in the convolutional layers
 
 class FullyConnectedLayer(object):
-
     def __init__(self, n_in, n_out, activation_fn=sigmoid, p_dropout=0.0):
         self.n_in = n_in
         self.n_out = n_out
         self.activation_fn = activation_fn
         self.p_dropout = p_dropout
+
         # Initialize weights and biases
-        self.w = theano.shared(
-            np.asarray(
-                np.random.normal(
-                    loc=0.0, scale=np.sqrt(1.0/n_out), size=(n_in, n_out)),
-                dtype=theano.config.floatX),
-            name='w', borrow=True)
-        self.b = theano.shared(
-            np.asarray(np.random.normal(loc=0.0, scale=1.0, size=(n_out,)),
-                       dtype=theano.config.floatX),
-            name='b', borrow=True)
+        self.w = torch.normal(0., np.sqrt(1.0/n_out), (n_in,n_out), requires_grad=True, dtype=torch.float32, device=device)
+        self.b = torch.randn(n_out, requires_grad=True, dtype=torch.float32)
         self.params = [self.w, self.b]
 
+    # set_inpt is just the feedforward function
     def set_inpt(self, inpt, inpt_dropout, mini_batch_size):
         self.inpt = inpt.reshape((mini_batch_size, self.n_in))
-        self.output = self.activation_fn(
-            (1-self.p_dropout)*T.dot(self.inpt, self.w) + self.b)
-        self.y_out = T.argmax(self.output, axis=1)
-        self.inpt_dropout = dropout_layer(
-            inpt_dropout.reshape((mini_batch_size, self.n_in)), self.p_dropout)
-        self.output_dropout = self.activation_fn(
-            T.dot(self.inpt_dropout, self.w) + self.b)
+        self.output = self.activation_fn((1-self.p_dropout)*torch.matmul(self.inpt, self.w) + self.b)
+        self.y_out = torch.argmax(self.output, dim=1)
+        self.inpt_dropout = dropout_layer(inpt_dropout.reshape((mini_batch_size, self.n_in)), self.p_dropout)
+        self.output_dropout = self.activation_fn(torch.matmul(self.inpt_dropout, self.w) + self.b)
 
     def accuracy(self, y):
-        "Return the accuracy for the mini-batch."
-        return T.mean(T.eq(y, self.y_out))
+        return torch.mean((self.y_out == y).float())
 
 class SoftmaxLayer(object):
-
     def __init__(self, n_in, n_out, p_dropout=0.0):
         self.n_in = n_in
         self.n_out = n_out
         self.p_dropout = p_dropout
+
         # Initialize weights and biases
-        self.w = theano.shared(
-            np.zeros((n_in, n_out), dtype=theano.config.floatX),
-            name='w', borrow=True)
-        self.b = theano.shared(
-            np.zeros((n_out,), dtype=theano.config.floatX),
-            name='b', borrow=True)
+        self.w = torch.zeros((n_in,n_out), requires_grad=True, dtype=torch.float32)
+        self.b = torch.zeros(n_out, requires_grad=True, dtype=torch.float32)
         self.params = [self.w, self.b]
 
+    # set_inpt is just the feedforward function
     def set_inpt(self, inpt, inpt_dropout, mini_batch_size):
         self.inpt = inpt.reshape((mini_batch_size, self.n_in))
-        self.output = softmax((1-self.p_dropout)*T.dot(self.inpt, self.w) + self.b)
-        self.y_out = T.argmax(self.output, axis=1)
-        self.inpt_dropout = dropout_layer(
-            inpt_dropout.reshape((mini_batch_size, self.n_in)), self.p_dropout)
-        self.output_dropout = softmax(T.dot(self.inpt_dropout, self.w) + self.b)
+        self.output = F.softmax((1-self.p_dropout)*torch.matmul(self.inpt, self.w) + self.b, dim=1)
+        self.y_out = torch.argmax(self.output, dim=1)
+        self.inpt_dropout = dropout_layer(inpt_dropout.reshape((mini_batch_size, self.n_in)), self.p_dropout)
+        self.output_dropout = F.softmax(torch.matmul(self.inpt_dropout, self.w) + self.b, dim=1)
 
     def cost(self, net):
         "Return the log-likelihood cost."
-        return -T.mean(T.log(self.output_dropout)[T.arange(net.y.shape[0]), net.y])
+        eps = 1e-8
+        # To avoid log(0), force all activations to be between eps and 1.0
+        probs = torch.clamp(self.output_dropout, eps, 1.0)
+        return -torch.mean(torch.log(probs)[torch.arange(net.y.shape[0]), net.y])
 
     def accuracy(self, y):
         "Return the accuracy for the mini-batch."
-        return T.mean(T.eq(y, self.y_out))
+        return torch.mean((self.y_out == y).float())
+
+#### Main class used to construct and train networks
+class Network(object):
+    def __init__(self, layers: FullyConnectedLayer | ConvPoolLayer | SoftmaxLayer, mini_batch_size: int):
+        self.layers = layers
+        self.mini_batch_size = mini_batch_size
+        self.params = [param for layer in self.layers for param in layer.params]
+
+    def feedforward(self, x, y):
+        """Theano works with symbolic variables, while Pytorch works with explicit values. This is why I turned part of the __init__() method into a feedforward() method.
+        Although the only input parameter manipulated here is ``x``, I still included ``y`` to stay consistent with the original Theano code. Otherwise the natural way to write this method would be ``feedforward(self, x)`` and instead move ``y`` to ``SoftmaxLayer.cost(self, net)``
+        """
+        init_layer = self.layers[0]
+        self.x = x
+        self.y = y
+        init_layer.set_inpt(self.x, self.x, self.mini_batch_size)
+        for j in range(1, len(self.layers)): # xrange() was renamed to range() in Python 3.
+            prev_layer, layer = self.layers[j-1], self.layers[j]
+            layer.set_inpt(prev_layer.output, prev_layer.output_dropout, self.mini_batch_size)
+        self.output = self.layers[-1].output
+        self.output_dropout = self.layers[-1].output_dropout
+
+    def zero_grad(self):
+        """An imitation of the built-in Pytorch function that resets the gradients. To be used between training epochs.
+        Setting to None has the same effect as setting to torch.zeros() but is said to have slightly better performance. See the docs for torch.optim.Optimizer.zero_grad.
+        """
+        for p in self.params:
+            p.grad = None
+
+    # Theano symbolic functions had to be turned into real functions.
+    # Also got moved out of Network.SGD().
+    def mb_accuracy(self, i, data_x, data_y):
+        mb_range = range(i*self.mini_batch_size,(i+1)*self.mini_batch_size)
+        self.feedforward(data_x[mb_range], data_y[mb_range])
+        return self.layers[-1].accuracy(self.y)
+
+    def mb_predictions(self, i, data_x, data_y):
+        mb_range = range(i*self.mini_batch_size,(i+1)*self.mini_batch_size)
+        self.feedforward(data_x[mb_range], data_y[mb_range])
+        return self.layers[-1].y_out
+
+    def SGD(self, training_data, epochs, mini_batch_size, eta, validation_data, test_data, lmbda=0.0):
+        """Train the network using mini-batch stochastic gradient descent.
+        """
+        training_x, training_y = training_data
+        validation_x, validation_y = validation_data
+        test_x, test_y = test_data
+
+        # compute number of minibatches for training, validation and testing
+        num_training_batches = int(size(training_data)/mini_batch_size)
+        num_validation_batches = int(size(validation_data)/mini_batch_size)
+        num_test_batches = int(size(test_data)/mini_batch_size)
+
+        # Do the actual training
+        best_validation_accuracy = 0.0
+        for epoch in range(epochs):
+            for mb_index in range(num_training_batches):
+                iteration = num_training_batches*epoch + mb_index
+                if iteration % 1000 == 0:
+                    print(f"Training mini-batch number {iteration}")
+
+                mb_range = range(mb_index*mini_batch_size,(mb_index+1)*mini_batch_size)
+                self.feedforward(training_x[mb_range], training_y[mb_range])
+
+                # define the (regularized) cost function and gradients
+                l2_norm_squared = sum([torch.sum(layer.w**2) for layer in self.layers])
+                cost = self.layers[-1].cost(self) + 0.5*lmbda*l2_norm_squared/num_training_batches
+                cost.backward()
+
+                with torch.no_grad():
+                    for layer in self.layers:
+                        layer.w -= (eta/num_training_batches) * layer.w.grad
+                        layer.b -= (eta/num_training_batches) * layer.b.grad
+                    if iteration % 50 == 0:
+                        print(f"{iteration}\t{self.layers[-1].b.grad.mean():.8f}\t{(self.layers[-1].b.grad**2).sum().sqrt():.8f}  \t{self.layers[-1].cost(self):.8f}  \t{cost:.8f}")
+                        # print(self.layers[-1].w.grad[-1])
+                        # print(self.layers[-1].b.grad[-1])
+                        # print(self.layers[-1].cost(self))
+                        # print('')
+
+                    if (iteration+1) % num_training_batches == 0:
+                        validation_accuracy = np.mean([self.mb_accuracy(j, validation_x, validation_y).cpu() for j in range(num_validation_batches)])
+                        print(f"Epoch {epoch}: validation accuracy {100*validation_accuracy:.2f}%")
+                        if validation_accuracy >= best_validation_accuracy:
+                            print("This is the best validation accuracy to date.")
+                            best_validation_accuracy = validation_accuracy
+                            best_iteration = iteration
+                            if test_data:
+                                test_accuracy = np.mean([self.mb_accuracy(j, test_x, test_y).cpu() for j in range(num_test_batches)])
+                                print(f"The corresponding test accuracy is {100*test_accuracy:.2f}%")
+            self.zero_grad()
+            print("")
+
+        print("Finished training network.")
+        print(f"Best validation accuracy of {100*best_validation_accuracy:.2f}% obtained at iteration {best_iteration}")
+        print(f"Corresponding test accuracy of {100*test_accuracy:.2f}%")
 
 
-#### Miscellanea
+# Miscellaneous
 def size(data):
-    "Return the size of the dataset `data`."
-    return data[0].get_value(borrow=True).shape[0]
+    return data[0].shape[0]
 
 def dropout_layer(layer, p_dropout):
-    srng = shared_randomstreams.RandomStreams(
-        np.random.RandomState(0).randint(999999))
-    mask = srng.binomial(n=1, p=1-p_dropout, size=layer.shape)
-    return layer*T.cast(mask, theano.config.floatX)
+    """I'm lazy. I just used Pytorch's function which does the trick.
+    """
+    return F.dropout(layer, p_dropout)
+
+
+
+if __name__ == "__main__":
+    mini_batch_size = 20
+    filter_shape=(20, 1, 5, 5)
+    image_shape=(mini_batch_size, 1, 28, 28)
+    poolsize=(2, 2)
+    training_data, validation_data, test_data = load_data_shared()
+
+    # data_cutoff = 5000 # max 10000
+    # for i in [0,1]:
+    #     training_data[i] = training_data[i][:5*data_cutoff]
+    #     validation_data[i] = validation_data[i][:data_cutoff]
+    #     test_data[i] = test_data[i][:data_cutoff]
+
+    shuffled_indexes = torch.randperm(size(training_data))
+    training_data[0][:] = training_data[0][shuffled_indexes]
+    training_data[1][:] = training_data[1][shuffled_indexes]
+
+    net = Network([
+                   ConvPoolLayer(filter_shape=filter_shape, image_shape=image_shape, poolsize=poolsize),
+                   FullyConnectedLayer(n_in=20*12*12, n_out=100),
+                   SoftmaxLayer(n_in=100, n_out=10)
+                  ],
+                  mini_batch_size)
+
+    # net = Network([
+    #                FullyConnectedLayer(n_in=784, n_out=100, activation_fn=ReLU),
+    #                SoftmaxLayer(n_in=100, n_out=10)
+    #               ],
+    #               mini_batch_size)
+
+
+
+# TODO
+#
+# ✅ fix net.feedforward not working when net starts with fully connected layer
+# ✅ (INTENDED BEHAVIOR) reset the weights to fix net.SGD starting with already good weights after a rerun
+# - fix vram accumulation when changing the structure of the Network (only current solution is to restart the ipython kernel)
+#
+# TODO
+
+
