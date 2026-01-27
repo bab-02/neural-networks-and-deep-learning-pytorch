@@ -229,23 +229,17 @@ class Network(object):
                     for layer in self.layers:
                         layer.w -= (eta/mini_batch_size) * layer.w.grad
                         layer.b -= (eta/mini_batch_size) * layer.b.grad
-                    if iteration % 50 == 0:
-                        print(f"{iteration}\t{self.layers[-1].b.grad.mean():.8f}\t{(self.layers[-1].b.grad**2).sum().sqrt():.8f}  \t{self.layers[-1].cost(self):.8f}  \t{cost:.8f}")
-                        # print(self.layers[-1].w.grad[-1])
-                        # print(self.layers[-1].b.grad[-1])
-                        # print(self.layers[-1].cost(self))
-                        # print('')
 
-                    if (iteration+1) % num_training_batches == 0:
-                        validation_accuracy = np.mean([self.mb_accuracy(j, validation_x, validation_y).cpu() for j in range(num_validation_batches)])
-                        print(f"Epoch {epoch}: validation accuracy {100*validation_accuracy:.2f}%")
-                        if validation_accuracy >= best_validation_accuracy:
-                            print("This is the best validation accuracy to date.")
-                            best_validation_accuracy = validation_accuracy
-                            best_iteration = iteration
-                            if test_data:
-                                test_accuracy = np.mean([self.mb_accuracy(j, test_x, test_y).cpu() for j in range(num_test_batches)])
-                                print(f"The corresponding test accuracy is {100*test_accuracy:.2f}%")
+                if (iteration+1) % num_training_batches == 0:
+                    validation_accuracy = np.mean([self.mb_accuracy(j, validation_x, validation_y).cpu() for j in range(num_validation_batches)])
+                    print(f"Epoch {epoch}: validation accuracy {100*validation_accuracy:.2f}%")
+                    if validation_accuracy >= best_validation_accuracy:
+                        print("This is the best validation accuracy to date.")
+                        best_validation_accuracy = validation_accuracy
+                        best_iteration = iteration
+                        if test_data:
+                            test_accuracy = np.mean([self.mb_accuracy(j, test_x, test_y).cpu() for j in range(num_test_batches)])
+                            print(f"The corresponding test accuracy is {100*test_accuracy:.2f}%")
             self.zero_grad()
             print("")
 
@@ -263,46 +257,10 @@ def dropout_layer(layer, p_dropout):
     """
     return F.dropout(layer, p_dropout)
 
-
-
-if __name__ == "__main__":
-    mini_batch_size = 20
-    filter_shape=(20, 1, 5, 5)
-    image_shape=(mini_batch_size, 1, 28, 28)
-    poolsize=(2, 2)
-    training_data, validation_data, test_data = load_data_shared()
-
-    # data_cutoff = 5000 # max 10000
-    # for i in [0,1]:
-    #     training_data[i] = training_data[i][:5*data_cutoff]
-    #     validation_data[i] = validation_data[i][:data_cutoff]
-    #     test_data[i] = test_data[i][:data_cutoff]
-
-    shuffled_indexes = torch.randperm(size(training_data))
-    training_data[0][:] = training_data[0][shuffled_indexes]
-    training_data[1][:] = training_data[1][shuffled_indexes]
-
-    net = Network([
-                   ConvPoolLayer(filter_shape=filter_shape, image_shape=image_shape, poolsize=poolsize),
-                   FullyConnectedLayer(n_in=20*12*12, n_out=100),
-                   SoftmaxLayer(n_in=100, n_out=10)
-                  ],
-                  mini_batch_size)
-
-    # net = Network([
-    #                FullyConnectedLayer(n_in=784, n_out=100, activation_fn=ReLU),
-    #                SoftmaxLayer(n_in=100, n_out=10)
-    #               ],
-    #               mini_batch_size)
-
-
-
-# TODO
-#
-# ✅ fix net.feedforward not working when net starts with fully connected layer
-# ✅ (INTENDED BEHAVIOR) reset the weights to fix net.SGD starting with already good weights after a rerun
-# - fix vram accumulation when changing the structure of the Network (only current solution is to restart the ipython kernel)
-#
-# TODO
-
-
+def data_shuffle(data):
+    """Randomly shuffles with a different seed on every run. Can be used on training_data, validation_data and test_data independently.
+    """
+    shuffled_indexes = torch.randperm(size(data))
+    data[0][:] = data[0][shuffled_indexes]
+    data[1][:] = data[1][shuffled_indexes]
+    return data
