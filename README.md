@@ -15,30 +15,43 @@ Only `src/network3.py` has been updated.
 > Hopefully I didn't make it too difficult.
 
 > [!NOTE]
-> **Hardware compatibility :**
+> **Hardware compatibility:**
 >
-> So far only tested on Python 3.10.19 + torch 2.5.1+cu121 on an RTX 4050.
+> So far only tested on Python 3.10.19 + torch 2.5.1+cu121 with an RTX 4050.
 > Will test more recent versions of Python in the future.
-> Feel free to send a PR for README.md if you succesfully tested on a different configuration.
+> Feel free to send a PR for README.md if you succesfully tested with a different configuration.
 >
 > Running on a non-Nvidia GPU will trigger CPU mode.
 
+> [!WARNING]
+> **Concerns:**
+>
+> For some reason, I need to turn down the learning rate tremendously in order to get percentages comparable with Nielsen's results.
+>
+> I'm talking factors like `10^3`, so
+>
+> `net.SGD(training_data, 60, mini_batch_size, 0.1, validation_data, test_data)` (Nielsen: 87.90%, Me: 20.05%)
+>
+> would become
+>
+> `net.SGD(training_data, 60, mini_batch_size, 0.0001, validation_data, test_data)` (Me: 87.31%).
+
 ### Details on the changes
 
-#### Requirements
+#### Requirements:
 
 - Numpy version is no longer capped to 1.22
 - Theano removed
 - Torch added: 2.2.0 minimum for Numpy 2.0 compatibility
 
-#### Theano to Pytorch
+#### Theano to Pytorch:
 
 Theano uses symbolic variables while Pytorch uses explicit values. This is what caused most of the changes.
 
 Most notable differences:
 
 - In `Network` class, the original `__init()__` function as been split into `__init()__` and `feedforward()`.
-- Modified the `theano.function([i], cost, updates=updates, givens={...})` as methods of the `Network` class.
+- Modified the 4 `theano.function([i], ..., givens={...})` as methods of the `Network` class.
 
 ### TODO
 
@@ -46,6 +59,7 @@ Most notable differences:
 - [x] (NOT RESETTING. INTENDED BEHAVIOR) Reset the weights to fix `Network.SGD` starting with already good weights after a rerun
 - [ ] Fix vram accumulation when changing the layer structure of `Network` (only current solution is to restart the whole ipython kernel)
 - [ ] Update remaining files to Pytorch.
+- [ ] Find a cause for the learning rate issue discussed above.
 
 ## Acknowledgements
 
