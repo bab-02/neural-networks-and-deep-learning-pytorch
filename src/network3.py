@@ -227,8 +227,8 @@ class Network(object):
 
                 with torch.no_grad():
                     for layer in self.layers:
-                        layer.w -= (eta/num_training_batches) * layer.w.grad
-                        layer.b -= (eta/num_training_batches) * layer.b.grad
+                        layer.w -= (eta/mini_batch_size) * layer.w.grad
+                        layer.b -= (eta/mini_batch_size) * layer.b.grad
                     if iteration % 50 == 0:
                         print(f"{iteration}\t{self.layers[-1].b.grad.mean():.8f}\t{(self.layers[-1].b.grad**2).sum().sqrt():.8f}  \t{self.layers[-1].cost(self):.8f}  \t{cost:.8f}")
                         # print(self.layers[-1].w.grad[-1])
