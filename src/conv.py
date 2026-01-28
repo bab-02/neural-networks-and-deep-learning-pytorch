@@ -15,8 +15,6 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
-import theano
-import theano.tensor as T
 
 import network3
 from network3 import sigmoid, tanh, ReLU, Network
@@ -201,23 +199,12 @@ def ensemble(nets):
     for test data which is erroneously classified, and a list of the
     corresponding erroneous predictions.
 
-    Note that this is a quick-and-dirty kluge: it'd be more reusable
-    (and faster) to define a Theano function taking the vote.  But
-    this works.
-
     """
     
     test_x, test_y = test_data
     for net in nets:
-        i = T.lscalar() # mini-batch index
-        net.test_mb_predictions = theano.function(
-            [i], net.layers[-1].y_out,
-            givens={
-                net.x: 
-                test_x[i*net.mini_batch_size: (i+1)*net.mini_batch_size]
-            })
         net.test_predictions = list(np.concatenate(
-            [net.test_mb_predictions(i) for i in range(1000)]))
+            [net.mb_predictions(i) for i in range(1000)]))
     all_test_predictions = zip(*[net.test_predictions for net in nets])
     def plurality(p): return Counter(p).most_common(1)[0][0]
     plurality_test_predictions = [plurality(p) 
