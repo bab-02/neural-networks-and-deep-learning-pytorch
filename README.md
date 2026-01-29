@@ -3,8 +3,8 @@
 This is a fork of [unexploredtest's repo](https://github.com/unexploredtest/neural-networks-and-deep-learning) that uses Pytorch instead of Theano.
 The main motivation was that Theano has been deprecated since Python 3.5.
 
-Only `src/network3.py` has been updated.
-`src/network.py` and `src/network2.py` are unchanged as they use Numpy to simulate the neural networks.
+~~Only `src/network3.py` has been updated. `src/network.py` and `src/network2.py` are unchanged as they use Numpy to simulate the neural networks.~~
+All scripts that used Theano have been updated.
 
 > [!NOTE]
 > **You can still follow Nielsen's book as if nothing changed.**
@@ -29,16 +29,29 @@ Only `src/network3.py` has been updated.
 > For some reason, I need to turn down the learning rate tremendously in order to get percentages comparable with Nielsen's results.
 >
 > I'm talking factors like `10^3`, so
+> ```py
+> >>> net.SGD(training_data, 60, 10, 0.1, validation_data, test_data)
+> ```
+> (Nielsen: 97.90%, Me: 20.05%) would become
+> ```py
+> >>> net.SGD(training_data, 60, 10, 0.0001, validation_data, test_data)
+> ```
+> (Me: 97.31%).
 >
-> `net.SGD(training_data, 60, mini_batch_size, 0.1, validation_data, test_data)` (Nielsen: 87.90%, Me: 20.05%)
+> Alternatively, increasing the mini-batch size also works,
+> ```py
+> >>> net.SGD(training_data, 60, 100, 0.1, validation_data, test_data)
+> ```
+> (Me: 97.48%).
 >
-> would become
->
-> `net.SGD(training_data, 60, mini_batch_size, 0.0001, validation_data, test_data)` (Me: 87.31%).
+> Both changes result in a more "careful" gradient descent, but the latter is much faster thanks to parallelization.
+> Why I need to make these tweaks in the first place is still a mystery to me.
 
 ### Details on the changes
 
 #### Requirements:
+
+Using a virtual environment is strongly recommended! It's a good habit to have even if you don't develop projects.
 
 - Numpy version is no longer capped to 1.22
 - Theano removed
@@ -50,15 +63,15 @@ Theano uses symbolic variables while Pytorch uses explicit values. This is what 
 
 Most notable differences:
 
-- In `Network` class, the original `__init()__` function as been split into `__init()__` and `feedforward()`.
-- Modified the 4 `theano.function([i], ..., givens={...})` as methods of the `Network` class.
+- In `Network` class, the original `__init()__` method has been split into `__init()__` and `feedforward()`.
+- The 4 symbolic functions `theano.function([i], ..., givens={...})` have been merged and adapted as 3 methods of the `Network` class.
 
 ### TODO
 
 - [x] Fix `Network.feedforward()` not working when the network starts with a layer type different to `ConvPoolLayer`
 - [x] (NOT RESETTING. INTENDED BEHAVIOR) Reset the weights to fix `Network.SGD` starting with already good weights after a rerun
 - [ ] Fix vram accumulation when changing the layer structure of `Network` (only current solution is to restart the whole ipython kernel)
-- [ ] Update remaining files to Pytorch.
+- [x] Update remaining files to Pytorch.
 - [ ] Find a cause for the learning rate issue discussed above.
 
 ## Acknowledgements
