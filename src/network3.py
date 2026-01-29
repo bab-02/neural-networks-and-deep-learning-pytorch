@@ -168,9 +168,9 @@ class Network(object):
         """Theano works with symbolic variables, while Pytorch works with explicit values. This is why I turned part of the __init__() method into a feedforward() method.
         Although the only input parameter manipulated here is ``x``, I still included ``y`` to stay consistent with the original Theano code. Otherwise the natural way to write this method would be ``feedforward(self, x)`` and instead move ``y`` to ``SoftmaxLayer.cost(self, net)``
         """
-        init_layer = self.layers[0]
         self.x = x
         self.y = y
+        init_layer = self.layers[0]
         init_layer.set_inpt(self.x, self.x, self.mini_batch_size)
         for j in range(1, len(self.layers)): # xrange() was renamed to range() in Python 3.
             prev_layer, layer = self.layers[j-1], self.layers[j]
@@ -187,6 +187,20 @@ class Network(object):
 
     # Theano symbolic functions had to be turned into real functions.
     # Also got moved out of Network.SGD().
+    def mb_train(self, i, data_x, data_y, eta, lmbda, n):
+        mb_range = range(i*self.mini_batch_size,(i+1)*self.mini_batch_size)
+        self.feedforward(data_x[mb_range], data_y[mb_range])
+
+        # define the (regularized) cost function and gradients
+        l2_norm_squared = sum([torch.sum(layer.w**2) for layer in self.layers])
+        cost = self.layers[-1].cost(self) + 0.5*lmbda*l2_norm_squared/n
+        cost.backward()
+
+        with torch.no_grad():
+            for layer in self.layers:
+                layer.w -= (eta/self.mini_batch_size) * layer.w.grad
+                layer.b -= (eta/self.mini_batch_size) * layer.b.grad
+
     def mb_accuracy(self, i, data_x, data_y):
         mb_range = range(i*self.mini_batch_size,(i+1)*self.mini_batch_size)
         self.feedforward(data_x[mb_range], data_y[mb_range])
@@ -200,7 +214,6 @@ class Network(object):
     def SGD(self, training_data, epochs, mini_batch_size, eta, validation_data, test_data, lmbda=0.0):
         """Train the network using mini-batch stochastic gradient descent.
         """
-        training_x, training_y = training_data
         validation_x, validation_y = validation_data
         test_x, test_y = test_data
 
@@ -212,23 +225,13 @@ class Network(object):
         # Do the actual training
         best_validation_accuracy = 0.0
         for epoch in range(epochs):
-            for mb_index in range(num_training_batches):
-                iteration = num_training_batches*epoch + mb_index
+            training_x, training_y = data_shuffle(training_data)
+            for mini_batch in range(num_training_batches):
+                iteration = num_training_batches*epoch + mini_batch
                 if iteration % 1000 == 0:
                     print(f"Training mini-batch number {iteration}")
 
-                mb_range = range(mb_index*mini_batch_size,(mb_index+1)*mini_batch_size)
-                self.feedforward(training_x[mb_range], training_y[mb_range])
-
-                # define the (regularized) cost function and gradients
-                l2_norm_squared = sum([torch.sum(layer.w**2) for layer in self.layers])
-                cost = self.layers[-1].cost(self) + 0.5*lmbda*l2_norm_squared/num_training_batches
-                cost.backward()
-
-                with torch.no_grad():
-                    for layer in self.layers:
-                        layer.w -= (eta/mini_batch_size) * layer.w.grad
-                        layer.b -= (eta/mini_batch_size) * layer.b.grad
+                self.mb_train(mini_batch, training_x, training_y, eta, lmbda, num_training_batches)
 
                 if (iteration+1) % num_training_batches == 0:
                     validation_accuracy = np.mean([self.mb_accuracy(j, validation_x, validation_y).cpu() for j in range(num_validation_batches)])
