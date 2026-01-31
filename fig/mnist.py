@@ -55,7 +55,7 @@ def plot_10_by_10_images(images):
 def plot_images_separately(images):
     "Plot the six MNIST images separately."
     fig = plt.figure()
-    for j in xrange(1, 7):
+    for j in range(1, 7):
         ax = fig.add_subplot(1, 6, j)
         ax.matshow(images[j-1], cmap = matplotlib.cm.binary)
         plt.xticks(np.array([]))
@@ -103,7 +103,7 @@ def plot_bad_images(images):
     n = len(bad_image_indices)
     bad_images = [images[j] for j in bad_image_indices]
     fig = plt.figure(figsize=(10, 15))
-    for j in xrange(1, n+1):
+    for j in range(1, n+1):
         ax = fig.add_subplot(25, 125, j)
         ax.matshow(bad_images[j-1], cmap = matplotlib.cm.binary)
         ax.set_title(str(bad_image_indices[j-1]))
@@ -121,7 +121,7 @@ def plot_really_bad_images(images):
     n = len(really_bad_image_indices)
     really_bad_images = [images[j] for j in really_bad_image_indices]
     fig = plt.figure(figsize=(10, 2))
-    for j in xrange(1, n+1):
+    for j in range(1, n+1):
         ax = fig.add_subplot(2, 9, j)
         ax.matshow(really_bad_images[j-1], cmap = matplotlib.cm.binary)
         #ax.set_title(str(really_bad_image_indices[j-1]))

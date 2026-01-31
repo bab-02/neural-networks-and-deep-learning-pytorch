@@ -9,3 +9,5 @@ src/ec2
 *.png
 *.svg
 *.json
+venv/
+.venv/

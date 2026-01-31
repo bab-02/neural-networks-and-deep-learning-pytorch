@@ -55,9 +55,8 @@ else:
     torch.set_default_device("cpu")
 
 def load_data_shared(filename="../data/mnist.pkl.gz"):
-    f = gzip.open(filename, 'rb')
-    training_data, validation_data, test_data = pickle.load(f, encoding="latin1")
-    f.close()
+    with gzip.open(filename, 'rb') as f:
+        training_data, validation_data, test_data = pickle.load(f, encoding="latin1")
 
     def shared(data):
         shared_x = torch.tensor(data[0], dtype=torch.float32)
