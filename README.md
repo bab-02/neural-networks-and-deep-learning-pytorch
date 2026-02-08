@@ -68,11 +68,15 @@ Most notable differences:
 
 ### TODO
 
-- [x] Fix `Network.feedforward()` not working when the network starts with a layer type different to `ConvPoolLayer`
-- [x] (NOT RESETTING. INTENDED BEHAVIOR) Reset the weights to fix `Network.SGD` starting with already good weights after a rerun
-- [ ] Fix vram accumulation when changing the layer structure of `Network` (only current solution is to restart the whole ipython kernel)
+- [x] Fix `Network.feedforward()` not working when the network starts with a layer type different to `ConvPoolLayer`.
+- [x] (NOT RESETTING. INTENDED BEHAVIOR) Reset the weights to fix `Network.SGD` starting with already good weights after a rerun.
+    - If you want to reset the weights, initiate a new `net = Network(...)` to overwrite the current `net`.
+- [ ] Fix VRAM accumulation when running `load_data_shared()` multiple times (only current solution is to restart the whole ipython kernel).
+    - It happens when running any code in between. Instead of using the data already loaded and cached, Pytorch allocates more VRAM to fit new data, eventually reaching OOM error.
+    - If you import `network3.py` and run code directly in the python console like Nielsen does in the book, load the data once and manipulate from there. You'll never encounter this issue.
 - [x] Update remaining files to Pytorch.
 - [ ] Find a cause for the learning rate issue discussed above.
+    - I'm clueless about this one. I'm starting to believe it's normal behavior.
 
 ## Acknowledgements
 
@@ -96,3 +100,4 @@ of the library.  I will not be making such modifications.
 As the code is written to accompany the book, I don't intend to add
 new features. However, bug reports are welcome, and you should feel
 free to fork and modify the code.
+
