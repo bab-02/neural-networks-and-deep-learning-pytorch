@@ -262,7 +262,7 @@ def dropout_layer(layer, p_dropout):
 def data_shuffle(data):
     """Randomly shuffles with a different seed on every run. Can be used on training_data, validation_data and test_data independently.
     """
-    shuffled_indexes = torch.randperm(size(data))
-    data[0][:] = data[0][shuffled_indexes]
-    data[1][:] = data[1][shuffled_indexes]
+    shuffled_indices = torch.randperm(size(data))
+    data[0][:] = data[0][shuffled_indices]
+    data[1][:] = data[1][shuffled_indices]
     return data
