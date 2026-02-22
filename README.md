@@ -14,15 +14,6 @@ All scripts that used Theano have been updated.
 > Only when you'll be asked to modify `network3.py` yourself in chapter 6 you'll have to understand how it works.
 > Hopefully I didn't make it too difficult.
 
-> [!NOTE]
-> **Hardware compatibility:**
->
-> So far only tested on Python 3.10.19 + torch 2.5.1+cu121 with an RTX 4050.
-> Will test more recent versions of Python in the future.
-> Feel free to send a PR for README.md if you succesfully tested with a different configuration.
->
-> Running on a non-Nvidia GPU will trigger CPU mode.
-
 > [!WARNING]
 > **Concerns:**
 >
@@ -46,6 +37,23 @@ All scripts that used Theano have been updated.
 >
 > Both changes result in a more "careful" gradient descent, but the latter is much faster thanks to parallelization.
 > Why I need to make these tweaks in the first place is still a mystery to me.
+
+### Compatibility
+
+Running on a non-Nvidia GPU will trigger CPU mode.
+
+Feel free to send a PR for README.md if you succesfully tested with a different configuration.
+
+| Config | GPU | Checked |
+| --- | --- | :-: |
+| Python 3.10.19 + torch 2.5.1+cu121 | RTX 4050 | ✅ |
+| Python 3.13.11 + torch 2.10.0+cu130 | RTX 4050 | ✅ |
+
+> [!NOTE]
+> Since Numpy 2.4.0, loading `mnist.plk.gz` raises a `VisibleDeprecationWarning`. You can ignore it.
+> The warning has been added recently but [the concerns have been existing since 2016](https://github.com/numpy/numpy/issues/8158).
+>
+> When the warning will be turned into an error I'll be forced to take actions.
 
 ### Details on the changes
 
